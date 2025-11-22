@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/badge';
@@ -14,13 +15,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import Textarea from '@/components/ui/Textarea';
-import { 
-  Wrench, 
-  Search, 
-  Plus, 
-  Eye, 
-  Edit, 
-  Trash2, 
+import {
+  Wrench,
+  Search,
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
   Upload,
   Download,
   Shield,
@@ -53,101 +54,12 @@ const CustomSelect = ({ value, onChange, options }: {
   );
 };
 
-const toolsData: (Tool & { 
-  category: string; 
-  lastUsed: string; 
-  usageCount: number; 
-  effectiveness: string;
-})[] = [
-  {
-    id: '1',
-    name: 'Nmap',
-    description: 'Network discovery and security auditing tool used to scan for open ports and identify running services on target systems.',
-    screenshot: 'https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Successfully identified 15 open ports and 3 vulnerable services during the SQL injection investigation.',
-    category: 'Network Scanning',
-    lastUsed: '2024-01-15T12:30:00Z',
-    usageCount: 47,
-    effectiveness: 'High'
-  },
-  {
-    id: '2',
-    name: 'Metasploit',
-    description: 'Penetration testing framework used for developing and executing exploit code against remote target machines.',
-    screenshot: 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Confirmed vulnerability exploitation path and demonstrated potential impact of the security flaw.',
-    category: 'Exploitation',
-    lastUsed: '2024-01-14T16:45:00Z',
-    usageCount: 23,
-    effectiveness: 'Critical'
-  },
-  {
-    id: '3',
-    name: 'Burp Suite',
-    description: 'Web application security testing platform used for intercepting, analyzing, and modifying HTTP/HTTPS traffic.',
-    screenshot: 'https://images.pexels.com/photos/1181673/pexels-photo-1181673.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Intercepted malicious SQL injection payloads and identified the exact vulnerable parameter in the login form.',
-    category: 'Web Security',
-    lastUsed: '2024-01-15T10:15:00Z',
-    usageCount: 89,
-    effectiveness: 'High'
-  },
-  {
-    id: '4',
-    name: 'Wireshark',
-    description: 'Network protocol analyzer used for capturing and analyzing network traffic in real-time.',
-    screenshot: 'https://images.pexels.com/photos/1181676/pexels-photo-1181676.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Captured and analyzed suspicious network packets during the DDoS attack, identifying attack patterns.',
-    category: 'Network Analysis',
-    lastUsed: '2024-01-14T14:20:00Z',
-    usageCount: 34,
-    effectiveness: 'High'
-  },
-  {
-    id: '5',
-    name: 'Nikto',
-    description: 'Web server scanner that performs comprehensive tests against web servers for multiple items including dangerous files and programs.',
-    screenshot: 'https://images.pexels.com/photos/1181674/pexels-photo-1181674.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Discovered 12 potential security vulnerabilities in the web application, including outdated software versions.',
-    category: 'Web Security',
-    lastUsed: '2024-01-13T09:30:00Z',
-    usageCount: 28,
-    effectiveness: 'Medium'
-  },
-  {
-    id: '6',
-    name: 'Splunk',
-    description: 'Security information and event management (SIEM) platform used for searching, monitoring, and analyzing machine-generated data.',
-    screenshot: 'https://images.pexels.com/photos/1181678/pexels-photo-1181678.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Correlated security events across multiple systems and identified the attack timeline and affected systems.',
-    category: 'SIEM',
-    lastUsed: '2024-01-15T13:45:00Z',
-    usageCount: 156,
-    effectiveness: 'Critical'
-  },
-  {
-    id: '7',
-    name: 'Volatility',
-    description: 'Advanced memory forensics framework used for analyzing volatile memory (RAM) dumps from compromised systems.',
-    screenshot: 'https://images.pexels.com/photos/1181679/pexels-photo-1181679.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Extracted malware artifacts from memory dump and identified persistence mechanisms used by the attacker.',
-    category: 'Forensics',
-    lastUsed: '2024-01-12T11:20:00Z',
-    usageCount: 15,
-    effectiveness: 'High'
-  },
-  {
-    id: '8',
-    name: 'ZAP',
-    description: 'OWASP Zed Attack Proxy - automated security testing tool for finding vulnerabilities in web applications.',
-    screenshot: 'https://images.pexels.com/photos/1181680/pexels-photo-1181680.jpeg?auto=compress&cs=tinysrgb&w=400',
-    impact: 'Automated scan revealed 8 security vulnerabilities including XSS and CSRF issues in the customer portal.',
-    category: 'Web Security',
-    lastUsed: '2024-01-11T15:10:00Z',
-    usageCount: 42,
-    effectiveness: 'Medium'
-  }
-];
+type ToolEntry = Tool & {
+  category: string | null;
+  lastUsed: string | null;
+  usageCount: number | null;
+  effectiveness: string | null;
+};
 
 const categoryOptions = [
   { value: 'all', label: 'All Categories' },
@@ -198,24 +110,99 @@ export default function ToolsUsedPage() {
   const [effectivenessFilter, setEffectivenessFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [tools, setTools] = useState<ToolEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredTools = toolsData.filter((tool) => {
-    const matchesSearch = tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         tool.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || !categoryFilter || tool.category === categoryFilter;
-    const matchesEffectiveness = effectivenessFilter === 'all' || !effectivenessFilter || tool.effectiveness === effectivenessFilter;
-    
-    return matchesSearch && matchesCategory && matchesEffectiveness;
-  });
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    fetch('/api/tools')
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Failed to load tools');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        if (!isMounted) return;
+        setTools(
+          (payload.data ?? []).map((tool: any) => ({
+            id: tool.id,
+            name: tool.name,
+            description: tool.description ?? '',
+            screenshot: tool.screenshot,
+            impact: tool.impact ?? 'Impact pending documentation',
+            category: tool.category,
+            lastUsed: tool.last_used,
+            usageCount: tool.usage_count,
+            effectiveness: tool.effectiveness,
+          }))
+        );
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (!isMounted) return;
+        setError(err.message);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
 
-  const formatDate = (dateString: string) => {
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredTools = useMemo(
+    () =>
+      tools.filter((tool) => {
+        const matchesSearch =
+          tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tool.description.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory =
+          categoryFilter === 'all' ||
+          !categoryFilter ||
+          tool.category === categoryFilter;
+        const matchesEffectiveness =
+          effectivenessFilter === 'all' ||
+          !effectivenessFilter ||
+          tool.effectiveness === effectivenessFilter;
+
+        return matchesSearch && matchesCategory && matchesEffectiveness;
+      }),
+    [tools, searchTerm, categoryFilter, effectivenessFilter]
+  );
+
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
+
+  const mostUsedTool = useMemo(() => {
+    return filteredTools.reduce(
+      (top, current) => {
+        if ((current.usageCount ?? 0) > (top.usageCount ?? 0)) {
+          return current;
+        }
+        return top;
+      },
+      filteredTools[0] ?? null
+    );
+  }, [filteredTools]);
+
+  const categoryCount = useMemo(() => {
+    const set = new Set(
+      filteredTools.map((tool) => tool.category ?? 'Uncategorized')
+    );
+    return set.size;
+  }, [filteredTools]);
 
   return (
     <DashboardLayout>
@@ -270,6 +257,12 @@ export default function ToolsUsedPage() {
           </CardContent>
         </Card>
 
+        {error && (
+          <div className="rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card variant="cyber">
@@ -288,8 +281,20 @@ export default function ToolsUsedPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Most Used</p>
-                  <p className="text-lg font-bold text-white">Splunk</p>
-                  <p className="text-xs text-gray-400">156 uses</p>
+                  {mostUsedTool ? (
+                    <>
+                      <p className="text-lg font-bold text-white">
+                        {mostUsedTool.name}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {mostUsedTool.usageCount ?? 0} uses
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      No usage data available
+                    </p>
+                  )}
                 </div>
                 <Shield className="h-8 w-8 text-blue-400" />
               </div>
@@ -313,7 +318,9 @@ export default function ToolsUsedPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Categories</p>
-                  <p className="text-2xl font-bold text-green-400">6</p>
+                  <p className="text-2xl font-bold text-green-400">
+                    {categoryCount}
+                  </p>
                 </div>
                 <Network className="h-8 w-8 text-green-400" />
               </div>
@@ -329,20 +336,22 @@ export default function ToolsUsedPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center text-lg">
-                      {getCategoryIcon(tool.category)}
+                      {getCategoryIcon(tool.category ?? 'default')}
                       <span className="ml-2">{tool.name}</span>
                     </CardTitle>
-                    {getEffectivenessBadge(tool.effectiveness)}
+                    {tool.effectiveness && getEffectivenessBadge(tool.effectiveness)}
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {tool.screenshot && (
-                      <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden">
-                        <img
+                      <div className="relative aspect-video overflow-hidden rounded-lg bg-gray-800">
+                        <Image
                           src={tool.screenshot}
                           alt={`${tool.name} screenshot`}
-                          className="w-full h-full object-cover opacity-80"
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="object-cover opacity-80"
                         />
                       </div>
                     )}
@@ -350,9 +359,9 @@ export default function ToolsUsedPage() {
                     <div>
                       <p className="text-sm text-gray-300 mb-2">{tool.description}</p>
                       <div className="text-xs text-gray-400 space-y-1">
-                        <p><span className="font-medium">Category:</span> {tool.category}</p>
+                        <p><span className="font-medium">Category:</span> {tool.category ?? 'Uncategorized'}</p>
                         <p><span className="font-medium">Last Used:</span> {formatDate(tool.lastUsed)}</p>
-                        <p><span className="font-medium">Usage Count:</span> {tool.usageCount}</p>
+                        <p><span className="font-medium">Usage Count:</span> {tool.usageCount ?? 0}</p>
                       </div>
                     </div>
 
@@ -378,8 +387,8 @@ export default function ToolsUsedPage() {
           </div>
         ) : (
           <Card>
-            <CardHeader>
-              <CardTitle>Tools List ({filteredTools.length})</CardTitle>
+                <CardHeader>
+              <CardTitle>{loading ? 'Loading tools…' : `Tools List (${filteredTools.length})`}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -399,7 +408,7 @@ export default function ToolsUsedPage() {
                       <tr key={tool.id} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center space-x-3">
-                            {getCategoryIcon(tool.category)}
+                            {getCategoryIcon(tool.category ?? 'default')}
                             <div>
                               <p className="font-medium text-white">{tool.name}</p>
                               <p className="text-sm text-gray-400 truncate max-w-xs">{tool.description}</p>
@@ -407,13 +416,13 @@ export default function ToolsUsedPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-sm text-gray-300">{tool.category}</span>
+                          <span className="text-sm text-gray-300">{tool.category ?? 'Uncategorized'}</span>
                         </td>
                         <td className="py-3 px-4">
-                          {getEffectivenessBadge(tool.effectiveness)}
+                          {tool.effectiveness && getEffectivenessBadge(tool.effectiveness)}
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-sm font-mono text-[var(--cyber-blue)]">{tool.usageCount}</span>
+                          <span className="text-sm font-mono text-[var(--cyber-blue)]">{tool.usageCount ?? 0}</span>
                         </td>
                         <td className="py-3 px-4">
                           <span className="text-sm text-gray-400">{formatDate(tool.lastUsed)}</span>

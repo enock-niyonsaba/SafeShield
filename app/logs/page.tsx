@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/badge';
@@ -37,99 +37,6 @@ const CustomSelect = ({ value, onChange, options }: {
     </Select>
   );
 };
-
-const systemLogs: SystemLog[] = [
-  {
-    id: '1',
-    timestamp: '2024-01-15T14:32:15Z',
-    severity: 'Critical',
-    source: 'Firewall',
-    sourceIP: '192.168.1.100',
-    action: 'BLOCKED',
-    description: 'Multiple failed login attempts detected from external IP'
-  },
-  {
-    id: '2',
-    timestamp: '2024-01-15T14:28:42Z',
-    severity: 'Warning',
-    source: 'IDS',
-    sourceIP: '10.0.0.45',
-    action: 'ALERT',
-    description: 'Suspicious SQL query pattern detected in web application logs'
-  },
-  {
-    id: '3',
-    timestamp: '2024-01-15T14:25:18Z',
-    severity: 'Info',
-    source: 'Web Server',
-    sourceIP: '203.0.113.42',
-    action: 'LOGGED',
-    description: 'User authentication successful for admin@company.com'
-  },
-  {
-    id: '4',
-    timestamp: '2024-01-15T14:22:33Z',
-    severity: 'Error',
-    source: 'Database',
-    sourceIP: '10.0.0.12',
-    action: 'FAILED',
-    description: 'Database connection timeout during backup operation'
-  },
-  {
-    id: '5',
-    timestamp: '2024-01-15T14:18:07Z',
-    severity: 'Warning',
-    source: 'Antivirus',
-    sourceIP: '10.0.0.78',
-    action: 'QUARANTINED',
-    description: 'Malicious file detected and quarantined: trojan.exe'
-  },
-  {
-    id: '6',
-    timestamp: '2024-01-15T14:15:44Z',
-    severity: 'Critical',
-    source: 'Network Monitor',
-    sourceIP: '198.51.100.23',
-    action: 'BLOCKED',
-    description: 'DDoS attack detected, traffic rate exceeded threshold'
-  },
-  {
-    id: '7',
-    timestamp: '2024-01-15T14:12:29Z',
-    severity: 'Info',
-    source: 'VPN',
-    sourceIP: '172.16.0.5',
-    action: 'CONNECTED',
-    description: 'VPN connection established for user: john.doe@company.com'
-  },
-  {
-    id: '8',
-    timestamp: '2024-01-15T14:08:16Z',
-    severity: 'Warning',
-    source: 'Email Security',
-    sourceIP: '209.85.128.26',
-    action: 'QUARANTINED',
-    description: 'Phishing email detected and quarantined from external sender'
-  },
-  {
-    id: '9',
-    timestamp: '2024-01-15T14:05:52Z',
-    severity: 'Error',
-    source: 'File Server',
-    sourceIP: '10.0.0.25',
-    action: 'DENIED',
-    description: 'Unauthorized file access attempt to sensitive directory'
-  },
-  {
-    id: '10',
-    timestamp: '2024-01-15T14:02:38Z',
-    severity: 'Info',
-    source: 'Backup System',
-    sourceIP: '10.0.0.50',
-    action: 'COMPLETED',
-    description: 'Daily backup completed successfully for all critical systems'
-  }
-];
 
 const severityOptions = [
   { value: 'all', label: 'All Severities' },
@@ -176,8 +83,50 @@ export default function SystemLogsPage() {
   const [severityFilter, setSeverityFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [dateRange, setDateRange] = useState('today');
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredLogs = systemLogs.filter((log) => {
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    fetch('/api/logs')
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Failed to load logs');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        if (!isMounted) return;
+        setLogs(
+          (payload.data ?? []).map((log: any) => ({
+            id: log.id,
+            timestamp: log.event_time,
+            severity: log.severity,
+            source: log.source,
+            sourceIP: log.source_ip,
+            action: log.action,
+            description: log.description,
+          }))
+        );
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (!isMounted) return;
+        setError(err.message);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredLogs = useMemo(() => logs.filter((log) => {
     const matchesSearch = log.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          log.sourceIP.includes(searchTerm) ||
                          log.action.toLowerCase().includes(searchTerm.toLowerCase());
@@ -185,7 +134,7 @@ export default function SystemLogsPage() {
     const matchesSource = sourceFilter === 'all' || !sourceFilter || log.source === sourceFilter;
     
     return matchesSearch && matchesSeverity && matchesSource;
-  });
+  }), [logs, searchTerm, severityFilter, sourceFilter]);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -327,11 +276,16 @@ export default function SystemLogsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>System Events ({filteredLogs.length})</span>
+              <span>{loading ? 'Loading events…' : `System Events (${filteredLogs.length})`}</span>
               <Filter className="h-5 w-5 text-gray-400" />
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {error}
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>

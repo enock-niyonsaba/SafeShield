@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/badge';
@@ -37,57 +37,7 @@ const directMessages = [
   { id: 'alex-chen', name: 'Alex Chen', status: 'offline', unread: 0, role: 'Forensics Specialist' }
 ];
 
-const sampleMessages: ChatMessage[] = [
-  {
-    id: '1',
-    user: 'Jane Smith',
-    message: 'Good morning team! I\'ve just finished analyzing the SQL injection incident from yesterday. The attack vector has been confirmed and patched.',
-    timestamp: '2024-01-15T09:15:00Z',
-    incidentId: 'INC-2024-001'
-  },
-  {
-    id: '2',
-    user: 'Mike Johnson',
-    message: 'Thanks Jane! I\'ve updated the firewall rules to prevent similar attacks. Also running a full network scan to check for any other vulnerabilities.',
-    timestamp: '2024-01-15T09:18:00Z'
-  },
-  {
-    id: '3',
-    user: 'Sarah Wilson',
-    message: 'Great work everyone. I\'ll be updating the incident report and notifying management. The response time was excellent - under 2 hours from detection to containment.',
-    timestamp: '2024-01-15T09:22:00Z'
-  },
-  {
-    id: '4',
-    user: 'John Doe',
-    message: 'I\'ve documented all the tools used in the investigation. Burp Suite was particularly effective in identifying the injection points.',
-    timestamp: '2024-01-15T09:25:00Z'
-  },
-  {
-    id: '5',
-    user: 'Alex Chen',
-    message: 'I\'m running memory forensics on the affected server. Will share findings once the analysis is complete. ETA: 30 minutes.',
-    timestamp: '2024-01-15T09:30:00Z'
-  },
-  {
-    id: '6',
-    user: 'Jane Smith',
-    message: 'Perfect! Let\'s schedule a debrief meeting for 2 PM to discuss lessons learned and process improvements.',
-    timestamp: '2024-01-15T09:35:00Z'
-  },
-  {
-    id: '7',
-    user: 'Mike Johnson',
-    message: 'Sounds good. I\'ll prepare the network analysis report by then. Also, should we consider implementing additional monitoring for SQL injection attempts?',
-    timestamp: '2024-01-15T09:40:00Z'
-  },
-  {
-    id: '8',
-    user: 'Sarah Wilson',
-    message: 'Absolutely. Let\'s add that to our action items. I\'ll create a ticket for the monitoring enhancement.',
-    timestamp: '2024-01-15T09:45:00Z'
-  }
-];
+type ChatEntry = ChatMessage & { incidentId?: string };
 
 const getStatusColor = (status: string) => {
   const colors = {
@@ -100,14 +50,51 @@ const getStatusColor = (status: string) => {
 
 export default function TeamChatPage() {
   const [activeChannel, setActiveChannel] = useState('incidents');
-  const [messages, setMessages] = useState<ChatMessage[]>(sampleMessages);
+  const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const loadMessages = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/chat?channel=${activeChannel}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Failed to load messages');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        const normalized: ChatEntry[] = (payload.data ?? []).map((item: any) => ({
+          id: item.id,
+          user: item.user_name,
+          message: item.message,
+          timestamp: item.created_at,
+          incidentId: item.incident_reference ?? undefined,
+        }));
+        setMessages(normalized);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [activeChannel]);
+
+  useEffect(() => {
+    loadMessages();
+    const interval = setInterval(loadMessages, 15000);
+    return () => clearInterval(interval);
+  }, [loadMessages]);
 
   useEffect(() => {
     scrollToBottom();
@@ -117,15 +104,56 @@ export default function TeamChatPage() {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
-    const message: ChatMessage = {
+    const optimisticMessage: ChatEntry = {
       id: Date.now().toString(),
       user: 'John Doe',
       message: newMessage,
       timestamp: new Date().toISOString()
     };
 
-    setMessages([...messages, message]);
+    setMessages((prev) => [...prev, optimisticMessage]);
     setNewMessage('');
+
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channel: activeChannel,
+        user_name: 'John Doe',
+        user_role: 'Security Analyst',
+        message: optimisticMessage.message
+      })
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Failed to send message');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        const persisted = payload.data;
+        if (persisted) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === optimisticMessage.id
+                ? {
+                    id: persisted.id,
+                    user: persisted.user_name,
+                    message: persisted.message,
+                    timestamp: persisted.created_at,
+                    incidentId: persisted.incident_reference ?? undefined
+                  }
+                : msg
+            )
+          );
+        }
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+      });
   };
 
   const formatTime = (timestamp: string) => {
@@ -287,6 +315,16 @@ export default function TeamChatPage() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {error && (
+              <div className="rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {error}
+              </div>
+            )}
+            {loading && messages.length === 0 && (
+              <div className="text-center text-sm text-gray-400">
+                Loading messages…
+              </div>
+            )}
             {messages.map((message, index) => {
               const showDate = index === 0 || 
                 formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);

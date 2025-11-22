@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -19,85 +19,37 @@ import {
   Users
 } from 'lucide-react';
 
-// Mock data for the incident
-const incidentData = {
-  id: 'INC-2024-001',
-  title: 'Suspicious SQL Injection Attempt',
-  type: 'SQL Injection',
-  severity: 'High',
-  status: 'Investigating',
-  description: 'Multiple SQL injection attempts detected on the customer portal login form. The attacks appear to be automated and are targeting user authentication bypass. Initial analysis shows attempts to extract user credentials and database schema information.',
-  reporter: 'John Doe',
-  assignee: 'Jane Smith',
-  createdAt: '2024-01-15T10:30:00Z',
-  updatedAt: '2024-01-15T12:15:00Z',
-  toolsUsed: [
-    {
-      id: '1',
-      name: 'Burp Suite',
-      description: 'Used for intercepting and analyzing HTTP requests to identify injection points',
-      impact: 'Confirmed presence of SQL injection vulnerability'
-    },
-    {
-      id: '2',
-      name: 'Nmap',
-      description: 'Port scanning to identify potential attack vectors',
-      impact: 'Identified open database ports that may be targeted'
-    },
-    {
-      id: '3',
-      name: 'Splunk',
-      description: 'Log analysis to track attack patterns and frequency',
-      impact: 'Identified 47 injection attempts in the last 2 hours'
-    }
-  ],
-  evidence: [
-    { id: '1', type: 'image', name: 'burp-suite-analysis.png', url: '#' },
-    { id: '2', type: 'log', name: 'access-logs.txt', url: '#' },
-    { id: '3', type: 'document', name: 'vulnerability-report.pdf', url: '#' }
-  ],
-  timeline: [
-    {
-      id: '1',
-      timestamp: '2024-01-15T10:30:00Z',
-      action: 'Incident Detected',
-      description: 'Automated monitoring system detected suspicious SQL queries',
-      user: 'System',
-      type: 'detection'
-    },
-    {
-      id: '2',
-      timestamp: '2024-01-15T10:35:00Z',
-      action: 'Initial Assessment',
-      description: 'Security analyst confirmed potential SQL injection attack',
-      user: 'John Doe',
-      type: 'analysis'
-    },
-    {
-      id: '3',
-      timestamp: '2024-01-15T11:00:00Z',
-      action: 'Containment Started',
-      description: 'Temporary rate limiting applied to affected endpoints',
-      user: 'Jane Smith',
-      type: 'containment'
-    },
-    {
-      id: '4',
-      timestamp: '2024-01-15T11:30:00Z',
-      action: 'Evidence Collection',
-      description: 'HTTP request logs and database query logs collected',
-      user: 'Mike Johnson',
-      type: 'analysis'
-    },
-    {
-      id: '5',
-      timestamp: '2024-01-15T12:15:00Z',
-      action: 'Vulnerability Analysis',
-      description: 'Confirmed SQL injection in user authentication form',
-      user: 'Jane Smith',
-      type: 'analysis'
-    }
-  ]
+type IncidentDetail = {
+  reference_id: string;
+  title: string;
+  type: string;
+  severity: string;
+  status: string;
+  description: string;
+  reporter: string | null;
+  assignee: string | null;
+  created_at: string;
+  updated_at: string;
+  tools_used: {
+    id?: string;
+    name: string;
+    description: string;
+    impact: string;
+  }[];
+  evidence: {
+    id: string;
+    type: 'image' | 'document' | 'log';
+    name: string;
+    url: string;
+  }[];
+  timeline: {
+    id: string;
+    timestamp: string;
+    action: string;
+    description: string;
+    user: string;
+    type: 'detection' | 'analysis' | 'containment' | 'eradication' | 'recovery';
+  }[];
 };
 
 const getSeverityBadge = (severity: string) => {
@@ -140,6 +92,40 @@ export default function IncidentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
+  const [incidentData, setIncidentData] = useState<IncidentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!params?.id) return;
+    let isMounted = true;
+    setLoading(true);
+
+    fetch(`/api/incidents/${params.id}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Incident not found');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        if (!isMounted) return;
+        setIncidentData(payload.data);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (!isMounted) return;
+        setError(err.message);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [params?.id]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -157,6 +143,28 @@ export default function IncidentDetailPage() {
     { id: 'tools', label: 'Tools & Analysis' },
     { id: 'evidence', label: 'Evidence' }
   ];
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex min-h-[50vh] items-center justify-center text-gray-400">
+          Loading incident…
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error || !incidentData) {
+    return (
+      <DashboardLayout>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4 text-center">
+          <AlertTriangle className="h-10 w-10 text-red-400" />
+          <p className="text-gray-300">{error ?? 'Incident not found'}</p>
+          <Button onClick={() => router.back()}>Go Back</Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -178,8 +186,8 @@ export default function IncidentDetailPage() {
                 {getStatusBadge(incidentData.status)}
               </div>
               <p className="text-gray-400">
-                <code className="text-[var(--cyber-blue)] font-mono mr-2">{incidentData.id}</code>
-                • Reported by {incidentData.reporter} • {formatDate(incidentData.createdAt)}
+                <code className="text-[var(--cyber-blue)] font-mono mr-2">{incidentData.reference_id}</code>
+                • Reported by {incidentData.reporter ?? 'Unknown'} • {formatDate(incidentData.created_at)}
               </p>
             </div>
           </div>
@@ -238,19 +246,19 @@ export default function IncidentDetailPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Reporter:</span>
-                    <span className="text-white">{incidentData.reporter}</span>
+                    <span className="text-white">{incidentData.reporter ?? 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Assignee:</span>
-                    <span className="text-white">{incidentData.assignee}</span>
+                    <span className="text-white">{incidentData.assignee ?? 'Unassigned'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Created:</span>
-                    <span className="text-white text-sm">{formatDate(incidentData.createdAt)}</span>
+                    <span className="text-white text-sm">{formatDate(incidentData.created_at)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Updated:</span>
-                    <span className="text-white text-sm">{formatDate(incidentData.updatedAt)}</span>
+                    <span className="text-white text-sm">{formatDate(incidentData.updated_at)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -295,8 +303,8 @@ export default function IncidentDetailPage() {
 
         {activeTab === 'tools' && (
           <div className="space-y-6">
-            {incidentData.toolsUsed.map((tool) => (
-              <Card key={tool.id}>
+            {incidentData.tools_used.map((tool) => (
+              <Card key={`${tool.name}-${tool.description}`}>
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Shield className="h-5 w-5 mr-2 text-[var(--matrix-green)]" />

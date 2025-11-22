@@ -24,7 +24,7 @@ export interface Incident {
 
 export interface Tool {
   id: string;
-  name: 'Nmap' | 'Metasploit' | 'Nikto' | 'ZAP' | 'Burp Suite' | 'Wireshark' | 'Volatility' | 'Splunk';
+  name: string;
   description: string;
   screenshot?: string;
   impact: string;

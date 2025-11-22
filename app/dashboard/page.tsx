@@ -1,92 +1,37 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/badge';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { 
-  AlertTriangle, 
-  Shield, 
-  CheckCircle, 
-  Clock, 
+import {
+  AlertTriangle,
+  Shield,
+  CheckCircle,
+  Clock,
   TrendingUp,
   Activity,
   Users,
   FileText
 } from 'lucide-react';
 
-const stats = [
-  {
-    name: 'Total Incidents',
-    value: '47',
-    change: '+12%',
-    changeType: 'increase',
-    icon: FileText,
-    color: 'text-blue-400'
-  },
-  {
-    name: 'Active Incidents',
-    value: '8',
-    change: '-3',
-    changeType: 'decrease',
-    icon: AlertTriangle,
-    color: 'text-yellow-400'
-  },
-  {
-    name: 'Resolved Today',
-    value: '12',
-    change: '+5',
-    changeType: 'increase',
-    icon: CheckCircle,
-    color: 'text-green-400'
-  },
-  {
-    name: 'Critical Incidents',
-    value: '2',
-    change: 'Stable',
-    changeType: 'neutral',
-    icon: Shield,
-    color: 'text-red-400'
-  }
-];
-
-const recentIncidents = [
-  {
-    id: 'INC-2024-001',
-    title: 'Suspicious SQL Injection Attempt',
-    type: 'SQL Injection',
-    severity: 'High',
-    status: 'Investigating',
-    reporter: 'John Doe',
-    createdAt: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: 'INC-2024-002',
-    title: 'Phishing Email Campaign Detected',
-    type: 'Phishing',
-    severity: 'Medium',
-    status: 'Contained',
-    reporter: 'Jane Smith',
-    createdAt: '2024-01-15T09:15:00Z'
-  },
-  {
-    id: 'INC-2024-003',
-    title: 'Malware Detection on Workstation',
-    type: 'Malware',
-    severity: 'Critical',
-    status: 'Open',
-    reporter: 'Mike Johnson',
-    createdAt: '2024-01-15T08:45:00Z'
-  },
-  {
-    id: 'INC-2024-004',
-    title: 'DDoS Attack on Web Server',
-    type: 'DDoS',
-    severity: 'High',
-    status: 'Resolved',
-    reporter: 'Sarah Wilson',
-    createdAt: '2024-01-14T16:22:00Z'
-  }
-];
+type DashboardResponse = {
+  metrics: {
+    totalIncidents: number;
+    activeIncidents: number;
+    resolvedToday: number;
+    criticalIncidents: number;
+  };
+  recentIncidents: Array<{
+    reference_id: string;
+    title: string;
+    type: string;
+    severity: string;
+    status: string;
+    reporter: string;
+    created_at: string;
+  }>;
+};
 
 const getSeverityBadge = (severity: string) => {
   const variants = {
@@ -112,6 +57,69 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function DashboardPage() {
+  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Failed to load dashboard data');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        setData(payload);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const stats = useMemo(() => {
+    const metrics = data?.metrics;
+    return [
+      {
+        name: 'Total Incidents',
+        value: metrics ? metrics.totalIncidents.toString() : '—',
+        change: '',
+        changeType: 'neutral',
+        icon: FileText,
+        color: 'text-blue-400'
+      },
+      {
+        name: 'Active Incidents',
+        value: metrics ? metrics.activeIncidents.toString() : '—',
+        change: '',
+        changeType: 'neutral',
+        icon: AlertTriangle,
+        color: 'text-yellow-400'
+      },
+      {
+        name: 'Resolved Today',
+        value: metrics ? metrics.resolvedToday.toString() : '—',
+        change: '',
+        changeType: 'neutral',
+        icon: CheckCircle,
+        color: 'text-green-400'
+      },
+      {
+        name: 'Critical Incidents',
+        value: metrics ? metrics.criticalIncidents.toString() : '—',
+        change: '',
+        changeType: 'neutral',
+        icon: Shield,
+        color: 'text-red-400'
+      }
+    ];
+  }, [data]);
+
+  const recentIncidents = data?.recentIncidents ?? [];
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -120,6 +128,12 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-white mb-2">Security Dashboard</h1>
           <p className="text-gray-400">Monitor and manage cybersecurity incidents in real-time</p>
         </div>
+
+        {error && (
+          <div className="rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -130,13 +144,17 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-400">{stat.name}</p>
                     <p className="text-2xl font-bold text-white mt-1">{stat.value}</p>
-                    <p className={`text-sm mt-1 ${
-                      stat.changeType === 'increase' ? 'text-green-400' : 
-                      stat.changeType === 'decrease' ? 'text-red-400' : 
-                      'text-gray-400'
-                    }`}>
-                      {stat.change} from last week
-                    </p>
+                    {!stat.change ? (
+                      <p className="text-sm mt-1 text-gray-500">Live data</p>
+                    ) : (
+                      <p className={`text-sm mt-1 ${
+                        stat.changeType === 'increase' ? 'text-green-400' : 
+                        stat.changeType === 'decrease' ? 'text-red-400' : 
+                        'text-gray-400'
+                      }`}>
+                        {stat.change}
+                      </p>
+                    )}
                   </div>
                   <stat.icon className={`h-8 w-8 ${stat.color}`} />
                 </div>
@@ -156,11 +174,17 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {loading && (
+                  <p className="text-sm text-gray-400">Loading recent incidents…</p>
+                )}
+                {!loading && recentIncidents.length === 0 && (
+                  <p className="text-sm text-gray-400">No incidents found.</p>
+                )}
                 {recentIncidents.map((incident) => (
-                  <div key={incident.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-800/30 hover:bg-gray-800/50 transition-colors cursor-pointer">
+                  <div key={incident.reference_id} className="flex items-center justify-between p-3 rounded-lg bg-gray-800/30 hover:bg-gray-800/50 transition-colors cursor-pointer">
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-1">
-                        <span className="text-sm font-mono text-[var(--cyber-blue)]">{incident.id}</span>
+                        <span className="text-sm font-mono text-[var(--cyber-blue)]">{incident.reference_id}</span>
                         {getSeverityBadge(incident.severity)}
                       </div>
                       <h4 className="font-medium text-white text-sm">{incident.title}</h4>

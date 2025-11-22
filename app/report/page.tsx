@@ -136,17 +136,67 @@ export default function ReportIncidentPage() {
     description: '',
     reporter: 'John Doe'
   });
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Redirect to incidents page
-    router.push('/incidents');
+    setError(null);
+    setSuccess(null);
+
+    const payload = {
+      title: formData.title,
+      type: formData.type,
+      severity: formData.severity,
+      description: formData.description,
+      reporter: formData.reporter,
+      status: 'Open',
+      toolsUsed: selectedTools.map((tool) => ({
+        name: tool,
+        description: 'Provided via incident report form',
+        impact: 'Pending investigation',
+      })),
+      evidence: uploadedFiles.map((file, index) => ({
+        id: `${index}`,
+        type: 'document' as const,
+        name: file.name,
+        url: '#',
+      })),
+      timeline: [],
+    };
+
+    try {
+      const response = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'Failed to submit incident');
+      }
+
+      setSuccess('Incident submitted successfully!');
+      setFormData({
+        title: '',
+        type: '',
+        severity: '',
+        description: '',
+        reporter: formData.reporter,
+      });
+      setSelectedTools([]);
+      setUploadedFiles([]);
+      router.push('/incidents');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleToolToggle = (tool: string) => {
@@ -179,6 +229,17 @@ export default function ReportIncidentPage() {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {(error || success) && (
+            <div
+              className={`mb-6 rounded border p-3 text-sm ${
+                error
+                  ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                  : 'border-green-500/30 bg-green-500/10 text-green-200'
+              }`}
+            >
+              {error ?? success}
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Form */}
             <div className="lg:col-span-2 space-y-6">

@@ -1,94 +1,70 @@
 
-# 🛡️ Safe Shield – Cybersecurity Toolkit
+# 🛡️ Safe Shield – Cybersecurity Incident Platform
 
-This repository includes all automated scripts and resources used in the **Safe Shield** platform, designed for the **Cybersecurity Incident Response and Defense Simulation Hackathon** under a simulated enterprise system, **UniPort**.
+A Next.js 13 App Router experience for tracking incidents, tools, logs, and team communication.  
+This update adds a Supabase-backed backend with RESTful endpoints so the UI no longer depends on hard-coded fixtures.
 
-## 📦 What's Included
+## ✨ Features
 
-### 🔍 Penetration Testing Scripts
-| Script | Tool | Description |
-|--------|------|-------------|
-| `nmap_scan.sh` | Nmap | Performs OS detection, port scanning, and service enumeration |
-| `nikto_scan.sh` | Nikto | Scans target web server for known vulnerabilities |
-| `zap_scan.py` | OWASP ZAP | Runs spider and active scan using ZAP API |
-| `burp_checklist.txt` | Burp Suite | Manual checklist for vulnerability testing in UniPort |
+- Dashboard metrics generated from Supabase data
+- Incident catalog with filtering, detail view, evidence, and timeline
+- Incident report form that persists to the database
+- Security tools catalog and usage metrics
+- Real-time style team chat (polling) scoped per channel
+- System log explorer with export-ready data
+- REST API surface (`/api/*`) powered by Supabase
 
-### 💣 Exploitation Simulation
-| Script | Tool | Description |
-|--------|------|-------------|
-| `metasploit_exploit.sh` | Metasploit | Simulated vsftpd backdoor exploit for demonstration only |
+## 🏁 Getting Started
 
-### 📊 Log Analysis and Visualization
-| Script | Description |
-|--------|-------------|
-| `log_parser.py` | Parses `log.txt` and summarizes incident types |
-| `log_visualizer.py` | Creates a bar chart of incident frequencies from `log.txt` |
-
-### 🧹 Utilities
-| Script | Description |
-|--------|-------------|
-| `cleanup.sh` | Removes temporary files and reports from previous runs |
-
----
-
-## 🔧 Requirements
-
-- Kali Linux or any Debian-based system
-- Python 3.x
-- Metasploit Framework
-- OWASP ZAP (with API enabled)
-- Nikto, Nmap
-- Python Libraries: `matplotlib`, `collections`
-
-Install Python dependencies with:
 ```bash
-pip3 install matplotlib
+npm install
+npm run dev
 ```
 
----
+Navigate to [http://localhost:3000](http://localhost:3000).
 
-## 🧪 Usage
+### Environment variables
 
-1. Make scripts executable:
-```bash
-chmod +x *.sh
+Copy `env.example` to `.env.local` and provide your Supabase project credentials.
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-2. Run scanning tools:
-```bash
-./nmap_scan.sh 127.0.0.1
-./nikto_scan.sh http://127.0.0.1:8000
-python3 zap_scan.py
+> ⚠️ Never expose the service role key outside server-side contexts.
+
+### Database bootstrap
+
+1. Create a new Supabase project.
+2. Run the SQL in `docs/supabase-schema.sql` (includes schema + seed data).
+3. Optional: customize the seed data to align with your environment.
+
+## 🔌 API Surface
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/api/incidents` | GET/POST | List or create incidents |
+| `/api/incidents/[reference]` | GET/PATCH/DELETE | Work with a single incident |
+| `/api/tools` | GET/POST | Manage security tools |
+| `/api/logs` | GET/POST | Retrieve or add system logs |
+| `/api/chat` | GET/POST | Channel-based chat messages |
+| `/api/dashboard` | GET | Aggregate metrics for the dashboard |
+
+All routes use Supabase server-side clients; payload validation is handled with `zod`.
+
+## 🧱 Project Structure
+
+```
+app/              # Next.js app router pages & API routes
+components/       # Reusable UI components (Radix + Tailwind)
+docs/             # Supabase schema & other reference docs
+hooks/            # Custom hooks
+lib/              # Supabase clients + utilities
+types/            # Shared TypeScript types
 ```
 
-3. Simulate exploitation:
-```bash
-./metasploit_exploit.sh 127.0.0.1
-```
+## 📄 License
 
-4. Analyze and visualize logs:
-```bash
-python3 log_parser.py
-python3 log_visualizer.py
-```
-
----
-
-## 📁 Sample Log Format (log.txt)
-```
-2025-07-20 10:00:00 - XSS
-2025-07-20 10:05:00 - Brute Force
-2025-07-20 10:20:00 - SQL Injection
-```
-
----
-
-## 👨‍🏫 Author & Contact
-Developed as part of the Safe Shield cybersecurity project for the Digital Talent Program.
-
-GitHub: [Safe Shield](https://github.com/enock-niyonsaba/safe_shield_DTP)  
-Email: enockccg28@gmail.com
-
----
-
-© 2025 Safe Shield Security Team | For educational and demonstration purposes only.
+MIT — see original repository for attribution details.

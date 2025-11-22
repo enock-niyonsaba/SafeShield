@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -38,74 +38,17 @@ const CustomSelect = ({ value, onChange, options }: {
   );
 };
 
-const incidents = [
-  {
-    id: 'INC-2024-001',
-    title: 'Suspicious SQL Injection Attempt',
-    type: 'SQL Injection',
-    severity: 'High',
-    status: 'Investigating',
-    reporter: 'John Doe',
-    assignee: 'Jane Smith',
-    createdAt: '2024-01-15T10:30:00Z',
-    updatedAt: '2024-01-15T12:15:00Z'
-  },
-  {
-    id: 'INC-2024-002',
-    title: 'Phishing Email Campaign Detected',
-    type: 'Phishing',
-    severity: 'Medium',
-    status: 'Contained',
-    reporter: 'Jane Smith',
-    assignee: 'Mike Johnson',
-    createdAt: '2024-01-15T09:15:00Z',
-    updatedAt: '2024-01-15T11:30:00Z'
-  },
-  {
-    id: 'INC-2024-003',
-    title: 'Malware Detection on Workstation',
-    type: 'Malware',
-    severity: 'Critical',
-    status: 'Open',
-    reporter: 'Mike Johnson',
-    assignee: 'John Doe',
-    createdAt: '2024-01-15T08:45:00Z',
-    updatedAt: '2024-01-15T08:45:00Z'
-  },
-  {
-    id: 'INC-2024-004',
-    title: 'DDoS Attack on Web Server',
-    type: 'DDoS',
-    severity: 'High',
-    status: 'Resolved',
-    reporter: 'Sarah Wilson',
-    assignee: 'Jane Smith',
-    createdAt: '2024-01-14T16:22:00Z',
-    updatedAt: '2024-01-15T09:10:00Z'
-  },
-  {
-    id: 'INC-2024-005',
-    title: 'Unauthorized Access Attempt',
-    type: 'Data Breach',
-    severity: 'Critical',
-    status: 'Investigating',
-    reporter: 'Alex Chen',
-    assignee: 'John Doe',
-    createdAt: '2024-01-14T14:18:00Z',
-    updatedAt: '2024-01-15T10:45:00Z'
-  },
-  {
-    id: 'INC-2024-006',
-    title: 'Suspicious Network Traffic',
-    type: 'Insider Threat',
-    severity: 'Medium',
-    status: 'Closed',
-    reporter: 'David Lee',
-    assignee: 'Mike Johnson',
-    createdAt: '2024-01-13T11:33:00Z',
-    updatedAt: '2024-01-14T16:20:00Z'
-  }
-];
+type Incident = {
+  reference_id: string;
+  title: string;
+  type: string;
+  severity: string;
+  status: string;
+  reporter: string | null;
+  assignee: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 const severityOptions = [
   { value: 'all', label: 'All Severities' },
@@ -151,15 +94,58 @@ export default function IncidentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredIncidents = incidents.filter((incident) => {
-    const matchesSearch = incident.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         incident.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSeverity = severityFilter === 'all' || !severityFilter || incident.severity === severityFilter;
-    const matchesStatus = statusFilter === 'all' || !statusFilter || incident.status === statusFilter;
-    
-    return matchesSearch && matchesSeverity && matchesStatus;
-  });
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    fetch('/api/incidents')
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? 'Failed to load incidents');
+        }
+        return res.json();
+      })
+      .then((payload) => {
+        if (!isMounted) return;
+        setIncidents(payload.data ?? []);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (!isMounted) return;
+        setError(err.message);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredIncidents = useMemo(() => {
+    return incidents.filter((incident) => {
+      const matchesSearch =
+        incident.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        incident.reference_id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSeverity =
+        severityFilter === 'all' ||
+        !severityFilter ||
+        incident.severity === severityFilter;
+      const matchesStatus =
+        statusFilter === 'all' ||
+        !statusFilter ||
+        incident.status === statusFilter;
+
+      return matchesSearch && matchesSeverity && matchesStatus;
+    });
+  }, [incidents, searchTerm, severityFilter, statusFilter]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -222,11 +208,18 @@ export default function IncidentsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>All Incidents ({filteredIncidents.length})</span>
+              <span>
+                {loading ? 'Loading incidents…' : `All Incidents (${filteredIncidents.length})`}
+              </span>
               <Filter className="h-5 w-5 text-gray-400" />
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {error}
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -243,19 +236,19 @@ export default function IncidentsPage() {
                 </thead>
                 <tbody>
                   {filteredIncidents.map((incident) => (
-                    <tr key={incident.id} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                    <tr key={incident.reference_id} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
                       <td className="py-3 px-4">
                         <code className="text-sm text-[var(--cyber-blue)] font-mono">
-                          {incident.id}
+                          {incident.reference_id}
                         </code>
                       </td>
                       <td className="py-3 px-4">
                         <div>
-                          <Link href={`/incidents/${incident.id}`} className="text-white hover:text-[var(--cyber-blue)] font-medium">
+                          <Link href={`/incidents/${incident.reference_id}`} className="text-white hover:text-[var(--cyber-blue)] font-medium">
                             {incident.title}
                           </Link>
                           <p className="text-xs text-gray-400 mt-1">
-                            Reported by {incident.reporter}
+                            Reported by {incident.reporter ?? 'Unknown'}
                           </p>
                         </div>
                       </td>
@@ -269,11 +262,11 @@ export default function IncidentsPage() {
                         {getStatusBadge(incident.status)}
                       </td>
                       <td className="py-3 px-4">
-                        <span className="text-sm text-gray-300">{incident.assignee}</span>
+                        <span className="text-sm text-gray-300">{incident.assignee ?? '—'}</span>
                       </td>
                       <td className="py-3 px-4">
                         <span className="text-sm text-gray-400">
-                          {formatDate(incident.updatedAt)}
+                          {formatDate(incident.updated_at)}
                         </span>
                       </td>
                       <td className="py-3 px-4">
